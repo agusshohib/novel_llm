@@ -3,6 +3,10 @@ name = "novel_llm"
 version = "0.1.0"
 edition = "2024"
 
+exclude = [
+    "data/*",
+]
+
 [dependencies]
 anyhow = "1.0.98"
 candle-core = "0.9.1"
@@ -12,3 +16,6 @@ ndarray = "0.16.1"
 plotly = "0.13.1"
 rand = "0.9.1"
 tiktoken-rs = "0.6.0"
+
+[features]
+cuda = ["candle-core/cuda", "candle-nn/cuda"]
