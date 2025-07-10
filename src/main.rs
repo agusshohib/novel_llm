@@ -28,9 +28,15 @@ mod sequential_transformers;
 mod transformer_block;
 
 fn main() {
-    // construt model
+    // Use cuda if possible.
     let dev = Device::cuda_if_available(0).unwrap();
-    let varmap = VarMap::new();
+
+    // Load model
+    let mut varmap = VarMap::new();
+    varmap.load("checkpoint.safetensors").unwrap();
+
+    // construt model
+    // let varmap = VarMap::new();
     let vb = VarBuilder::from_varmap(&varmap, DType::F32, &dev);
     let cfg = Config::gpt2_124m();
     let model = GPTModel::new(cfg, vb.pp("model")).unwrap();
@@ -100,49 +106,49 @@ fn main() {
     varmap.save("checkpoint.safetensors").unwrap();
 
     // construct a new copy of the model and its varmap
-    let mut varmap = VarMap::new();
-    let vb = VarBuilder::from_varmap(&varmap, DType::F32, &dev);
-    let _model = GPTModel::new(cfg, vb.pp("model")).unwrap();
-    println!(
-        "model.out_head.weight first 10 weights BEFORE load: {:?}",
-        varmap
-            .data()
-            .lock()
-            .unwrap()
-            .get("model.out_head.weight")
-            .ok_or_else(|| {
-                Error::CannotFindTensor {
-                    path: "model.out_head.weight".to_string(),
-                }
-                .bt()
-            })
-            .unwrap()
-            .i((1, ..10))
-            .unwrap()
-            .to_vec1::<f32>()
-    );
+    // let mut varmap = VarMap::new();
+    // let vb = VarBuilder::from_varmap(&varmap, DType::F32, &dev);
+    // let _model = GPTModel::new(cfg, vb.pp("model")).unwrap();
+    // println!(
+    //     "model.out_head.weight first 10 weights BEFORE load: {:?}",
+    //     varmap
+    //         .data()
+    //         .lock()
+    //         .unwrap()
+    //         .get("model.out_head.weight")
+    //         .ok_or_else(|| {
+    //             Error::CannotFindTensor {
+    //                 path: "model.out_head.weight".to_string(),
+    //             }
+    //             .bt()
+    //         })
+    //         .unwrap()
+    //         .i((1, ..10))
+    //         .unwrap()
+    //         .to_vec1::<f32>()
+    // );
 
     // load the saved weights into the new model copy
-    println!("Loading weights from `./checkpoint.safetensors`");
-    varmap.load("checkpoint.safetensors").unwrap();
-    println!(
-        "model.out_head.weight first 10 weights AFTER load: {:?}",
-        varmap
-            .data()
-            .lock()
-            .unwrap()
-            .get("model.out_head.weight")
-            .ok_or_else(|| {
-                Error::CannotFindTensor {
-                    path: "model.out_head.weight".to_string(),
-                }
-                .bt()
-            })
-            .unwrap()
-            .i((1, ..10))
-            .unwrap()
-            .to_vec1::<f32>()
-    );
+    // println!("Loading weights from `./checkpoint.safetensors`");
+    // varmap.load("checkpoint.safetensors").unwrap();
+    // println!(
+    //     "model.out_head.weight first 10 weights AFTER load: {:?}",
+    //     varmap
+    //         .data()
+    //         .lock()
+    //         .unwrap()
+    //         .get("model.out_head.weight")
+    //         .ok_or_else(|| {
+    //             Error::CannotFindTensor {
+    //                 path: "model.out_head.weight".to_string(),
+    //             }
+    //             .bt()
+    //         })
+    //         .unwrap()
+    //         .i((1, ..10))
+    //         .unwrap()
+    //         .to_vec1::<f32>()
+    // );
 
     // save plot data
     println!("Saving weights to `./plot_pretraining_loss.html`");
