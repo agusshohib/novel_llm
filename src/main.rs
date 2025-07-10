@@ -33,13 +33,13 @@ fn main() {
 
     // Load model
     let mut varmap = VarMap::new();
-    varmap.load("checkpoint.safetensors").unwrap();
 
     // construt model
     // let varmap = VarMap::new();
     let vb = VarBuilder::from_varmap(&varmap, DType::F32, &dev);
     let cfg = Config::gpt2_124m();
     let model = GPTModel::new(cfg, vb.pp("model")).unwrap();
+    varmap.load("checkpoint.safetensors").unwrap();
     let optimizer = AdamW::new(
         varmap.all_vars(),
         ParamsAdamW {
