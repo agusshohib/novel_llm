@@ -35,8 +35,9 @@ fn main() {
     let mut vm = VarMap::new();
     let vb = VarBuilder::from_varmap(&vm, DType::F32, &dev);
     let config = Config::gpt2_124m();
-    let model = GPTModel::new(config, vb.pp("model")).unwrap();
+    let vb = vb.pp("model");
     vm.load("checkpoint.safetensors").unwrap();
+    let model = GPTModel::new(config, vb).unwrap();
 
     let optimizer = AdamW::new(
         vm.all_vars(),
