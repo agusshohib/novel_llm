@@ -35,11 +35,10 @@ fn main() {
     let mut varmap = VarMap::new();
 
     // construt model
-    // let varmap = VarMap::new();
     let vb = VarBuilder::from_varmap(&varmap, DType::F32, &dev);
+    varmap.load("checkpoint.safetensors").unwrap();
     let cfg = Config::gpt2_124m();
     let model = GPTModel::new(cfg, vb.pp("model")).unwrap();
-    varmap.load("checkpoint.safetensors").unwrap();
     let optimizer = AdamW::new(
         varmap.all_vars(),
         ParamsAdamW {
@@ -104,51 +103,6 @@ fn main() {
     );
     println!("Saving weights to `./checkpoint.safetensors`");
     varmap.save("checkpoint.safetensors").unwrap();
-
-    // construct a new copy of the model and its varmap
-    // let mut varmap = VarMap::new();
-    // let vb = VarBuilder::from_varmap(&varmap, DType::F32, &dev);
-    // let _model = GPTModel::new(cfg, vb.pp("model")).unwrap();
-    // println!(
-    //     "model.out_head.weight first 10 weights BEFORE load: {:?}",
-    //     varmap
-    //         .data()
-    //         .lock()
-    //         .unwrap()
-    //         .get("model.out_head.weight")
-    //         .ok_or_else(|| {
-    //             Error::CannotFindTensor {
-    //                 path: "model.out_head.weight".to_string(),
-    //             }
-    //             .bt()
-    //         })
-    //         .unwrap()
-    //         .i((1, ..10))
-    //         .unwrap()
-    //         .to_vec1::<f32>()
-    // );
-
-    // load the saved weights into the new model copy
-    // println!("Loading weights from `./checkpoint.safetensors`");
-    // varmap.load("checkpoint.safetensors").unwrap();
-    // println!(
-    //     "model.out_head.weight first 10 weights AFTER load: {:?}",
-    //     varmap
-    //         .data()
-    //         .lock()
-    //         .unwrap()
-    //         .get("model.out_head.weight")
-    //         .ok_or_else(|| {
-    //             Error::CannotFindTensor {
-    //                 path: "model.out_head.weight".to_string(),
-    //             }
-    //             .bt()
-    //         })
-    //         .unwrap()
-    //         .i((1, ..10))
-    //         .unwrap()
-    //         .to_vec1::<f32>()
-    // );
 
     // save plot data
     println!("Saving weights to `./plot_pretraining_loss.html`");
