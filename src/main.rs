@@ -28,17 +28,15 @@ mod sequential_transformers;
 mod transformer_block;
 
 fn main() {
-    // Use cuda if possible.
+    // Create Variable Manager
     let dev = Device::cuda_if_available(0).unwrap();
-
-    // construt model
     let mut vm = VarMap::new();
     let vb = VarBuilder::from_varmap(&vm, DType::F32, &dev);
-    let config = Config::gpt2_124m();
-    let a = vb.pp("model");
-    vm.load("checkpoint.safetensors").unwrap();
-    let model = GPTModel::new(config, a).unwrap();
 
+    // Prepare Model
+    let config = Config::gpt2_124m();
+    let model = GPTModel::new(config, vb.pp("model")).unwrap();
+    vm.load("checkpoint.safetensors").unwrap();
     let optimizer = AdamW::new(
         vm.all_vars(),
         ParamsAdamW {
@@ -49,7 +47,7 @@ fn main() {
     )
     .unwrap();
 
-    // train model for an epoch
+    // Train Model
     let tokenizer = get_bpe_from_model("gpt2").unwrap();
     let (eval_freq, eval_iter, num_epochs) = (5_usize, 5_usize, 10_usize);
     let (train_loader, val_loader) = get_train_val_data_loaders(false).unwrap();
