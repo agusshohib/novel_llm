@@ -31,16 +31,15 @@ fn main() {
     // Use cuda if possible.
     let dev = Device::cuda_if_available(0).unwrap();
 
-    // Load model
-    let mut varmap = VarMap::new();
-
     // construt model
-    let vb = VarBuilder::from_varmap(&varmap, DType::F32, &dev);
-    let cfg = Config::gpt2_124m();
-    let model = GPTModel::new(cfg, vb.pp("model")).unwrap();
-    varmap.load("checkpoint.safetensors").unwrap();
+    let mut vm = VarMap::new();
+    let vb = VarBuilder::from_varmap(&vm, DType::F32, &dev);
+    let config = Config::gpt2_124m();
+    let model = GPTModel::new(config, vb.pp("model")).unwrap();
+    vm.load("checkpoint.safetensors").unwrap();
+
     let optimizer = AdamW::new(
-        varmap.all_vars(),
+        vm.all_vars(),
         ParamsAdamW {
             lr: 0.0004,
             weight_decay: 0.1,
@@ -59,7 +58,7 @@ fn main() {
         &train_loader,
         &val_loader,
         optimizer,
-        vb.device(),
+        &dev,
         num_epochs,
         eval_freq,
         eval_iter,
@@ -73,7 +72,7 @@ fn main() {
         &model,
         text_to_token_ids(start_context, &tokenizer, vb.device()).unwrap(),
         25,
-        cfg.context_length,
+        config.context_length,
     )
     .unwrap();
 
@@ -83,26 +82,8 @@ fn main() {
     );
 
     // save weights
-    println!(
-        "model.out_head.weight first 10 weights BEFORE save: {:?}",
-        varmap
-            .data()
-            .lock()
-            .unwrap()
-            .get("model.out_head.weight")
-            .ok_or_else(|| {
-                Error::CannotFindTensor {
-                    path: "model.out_head.weight".to_string(),
-                }
-                .bt()
-            })
-            .unwrap()
-            .i((1, ..10))
-            .unwrap()
-            .to_vec1::<f32>()
-    );
     println!("Saving weights to `./checkpoint.safetensors`");
-    varmap.save("checkpoint.safetensors").unwrap();
+    vm.save("checkpoint.safetensors").unwrap();
 
     // save plot data
     println!("Saving weights to `./plot_pretraining_loss.html`");
