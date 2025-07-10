@@ -1,4 +1,9 @@
-use std::{cmp, collections::HashSet, fs::read_to_string, path::Path};
+use std::{
+    cmp,
+    collections::HashSet,
+    fs::{File, read_to_string},
+    path::Path,
+};
 
 use candle_core::{D, DType, Device, Error, IndexOp, ModuleT, Result, Tensor};
 use candle_nn::{AdamW, Optimizer, ParamsAdamW, VarBuilder, VarMap, ops::softmax};
@@ -28,6 +33,8 @@ mod sequential_transformers;
 mod transformer_block;
 
 fn main() {
+    const MODEL: &str = "checkpoint.safetensors";
+
     // Create Variable Manager
     let dev = Device::cuda_if_available(0).unwrap();
     let mut vm = VarMap::new();
@@ -36,7 +43,11 @@ fn main() {
     // Prepare Model
     let config = Config::gpt2_124m();
     let model = GPTModel::new(config, vb.pp("model")).unwrap();
-    vm.load("checkpoint.safetensors").unwrap();
+    if Path::new(MODEL).exists() {
+        vm.load(MODEL).unwrap();
+    }
+
+    // Training Optimizer
     let optimizer = AdamW::new(
         vm.all_vars(),
         ParamsAdamW {
@@ -82,7 +93,7 @@ fn main() {
 
     // save weights
     println!("Saving weights to `./checkpoint.safetensors`");
-    vm.save("checkpoint.safetensors").unwrap();
+    vm.save(MODEL).unwrap();
 
     // save plot data
     println!("Saving weights to `./plot_pretraining_loss.html`");
