@@ -33,8 +33,6 @@ mod sequential_transformers;
 mod transformer_block;
 
 fn main() {
-    const MODEL: &str = "checkpoint.safetensors";
-
     // Create Variable Manager
     let dev = Device::cuda_if_available(0).unwrap();
     let mut vm = VarMap::new();
@@ -43,8 +41,9 @@ fn main() {
     // Prepare Model
     let config = Config::gpt2_124m();
     let model = GPTModel::new(config, vb.pp("model")).unwrap();
-    if Path::new(MODEL).exists() {
-        vm.load(MODEL).unwrap();
+    if Path::new("checkpoint.safetensors").exists() {
+        println!("Load weights from `./checkpoint.safetensors`");
+        vm.load("checkpoint.safetensors").unwrap();
     }
 
     // Training Optimizer
@@ -92,8 +91,8 @@ fn main() {
     );
 
     // Save Weight
-    println!("Saving weights to `./checkpoint.safetensors`");
-    vm.save(MODEL).unwrap();
+    println!("Saving weights to `./checkpoint2.safetensors`");
+    vm.save("checkpoint2.safetensors").unwrap();
 
     // Save Loss Plot
     println!("Saving loss plot to `./plot_pretraining_loss.html`");
