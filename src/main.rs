@@ -1,15 +1,14 @@
 use std::{cmp, collections::HashSet, fs::read_to_string, path::Path};
 
-use candle_core::{D, DType, Device, IndexOp, ModuleT, Result, Tensor};
+use candle_core::{D, DType, Device, Error, IndexOp, ModuleT, Result, Tensor};
 use candle_nn::{AdamW, Optimizer, ParamsAdamW, VarBuilder, VarMap, ops::softmax};
 use ndarray::linspace;
-use plotly::{common::Mode, layout::Axis, Layout, Plot, Scatter};
+use plotly::{Layout, Plot, Scatter, common::Mode, layout::Axis};
 use tiktoken_rs::{CoreBPE, get_bpe_from_model};
 
 use crate::{
     config::Config, data_loader::DataLoader, gpt::GPT, gpt_data_loader::GPTDataLoader,
     gpt_dataset_v1::GPTDatasetV1, gpt_model::GPTModel,
-    sequential_transformers::SequentialTransformers,
 };
 
 mod config;
@@ -29,11 +28,12 @@ mod sequential_transformers;
 mod transformer_block;
 
 fn main() {
+    // construt model
     let dev = Device::cuda_if_available(0).unwrap();
     let varmap = VarMap::new();
     let vb = VarBuilder::from_varmap(&varmap, DType::F32, &dev);
     let cfg = Config::gpt2_124m();
-    let model = GPTModel::new(Config::gpt2_124m(), vb.pp("model")).unwrap();
+    let model = GPTModel::new(cfg, vb.pp("model")).unwrap();
     let optimizer = AdamW::new(
         varmap.all_vars(),
         ParamsAdamW {
@@ -43,6 +43,8 @@ fn main() {
         },
     )
     .unwrap();
+
+    // train model for an epoch
     let tokenizer = get_bpe_from_model("gpt2").unwrap();
     let (eval_freq, eval_iter, num_epochs) = (5_usize, 5_usize, 10_usize);
     let (train_loader, val_loader) = get_train_val_data_loaders(false).unwrap();
@@ -75,6 +77,74 @@ fn main() {
         token_ids_to_text(token_ids, &tokenizer)
     );
 
+    // save weights
+    println!(
+        "model.out_head.weight first 10 weights BEFORE save: {:?}",
+        varmap
+            .data()
+            .lock()
+            .unwrap()
+            .get("model.out_head.weight")
+            .ok_or_else(|| {
+                Error::CannotFindTensor {
+                    path: "model.out_head.weight".to_string(),
+                }
+                .bt()
+            })
+            .unwrap()
+            .i((1, ..10))
+            .unwrap()
+            .to_vec1::<f32>()
+    );
+    println!("Saving weights to `./checkpoint.safetensors`");
+    varmap.save("checkpoint.safetensors").unwrap();
+
+    // construct a new copy of the model and its varmap
+    let mut varmap = VarMap::new();
+    let vb = VarBuilder::from_varmap(&varmap, DType::F32, &dev);
+    let _model = GPTModel::new(cfg, vb.pp("model")).unwrap();
+    println!(
+        "model.out_head.weight first 10 weights BEFORE load: {:?}",
+        varmap
+            .data()
+            .lock()
+            .unwrap()
+            .get("model.out_head.weight")
+            .ok_or_else(|| {
+                Error::CannotFindTensor {
+                    path: "model.out_head.weight".to_string(),
+                }
+                .bt()
+            })
+            .unwrap()
+            .i((1, ..10))
+            .unwrap()
+            .to_vec1::<f32>()
+    );
+
+    // load the saved weights into the new model copy
+    println!("Loading weights from `./checkpoint.safetensors`");
+    varmap.load("checkpoint.safetensors").unwrap();
+    println!(
+        "model.out_head.weight first 10 weights AFTER load: {:?}",
+        varmap
+            .data()
+            .lock()
+            .unwrap()
+            .get("model.out_head.weight")
+            .ok_or_else(|| {
+                Error::CannotFindTensor {
+                    path: "model.out_head.weight".to_string(),
+                }
+                .bt()
+            })
+            .unwrap()
+            .i((1, ..10))
+            .unwrap()
+            .to_vec1::<f32>()
+    );
+
+    // save plot data
     println!("Saving weights to `./plot_pretraining_loss.html`");
     let epochs_seen = Vec::from_iter(linspace(0_f32, num_epochs as f32, train_losses.len()));
     let tokens_seen = tokens_seen
@@ -88,7 +158,8 @@ fn main() {
         train_losses,
         val_losses,
         save_path,
-    ).unwrap();
+    )
+    .unwrap();
 }
 
 pub fn calc_loss_batch<M: GPT + ModuleT>(
