@@ -78,25 +78,25 @@ fn main() {
     )
     .unwrap();
 
+    // Evaluate
     let token_ids = generate_text_simple(
         &model,
-        text_to_token_ids(start_context, &tokenizer, vb.device()).unwrap(),
+        text_to_token_ids(start_context, &tokenizer, &dev).unwrap(),
         25,
         config.context_length,
     )
     .unwrap();
-
     println!(
         "Output text:\n{:?}",
         token_ids_to_text(token_ids, &tokenizer)
     );
 
-    // save weights
+    // Save Weight
     println!("Saving weights to `./checkpoint.safetensors`");
     vm.save(MODEL).unwrap();
 
-    // save plot data
-    println!("Saving weights to `./plot_pretraining_loss.html`");
+    // Save Loss Plot
+    println!("Saving loss plot to `./plot_pretraining_loss.html`");
     let epochs_seen = Vec::from_iter(linspace(0_f32, num_epochs as f32, train_losses.len()));
     let tokens_seen = tokens_seen
         .into_iter()
