@@ -13,7 +13,7 @@ impl Config {
     pub fn bnbusdt() -> Self {
         Self {
             vocab_size: 2820,
-            context_length: 256,
+            context_length: 512,
             emb_dim: 768,
             n_heads: 12,
             n_layers: 12,
