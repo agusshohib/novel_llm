@@ -1,20 +1,16 @@
 use std::{
     cmp,
-    collections::HashSet,
-    fs::{File, read_to_string},
+    fs::File,
+    io::{BufRead, BufReader},
     path::Path,
 };
 
-use candle_core::{D, DType, Device, Error, IndexOp, ModuleT, Result, Tensor};
+use candle_core::{D, DType, Device, IndexOp, ModuleT, Result, Tensor};
 use candle_nn::{AdamW, Optimizer, ParamsAdamW, VarBuilder, VarMap, ops::softmax};
 use ndarray::linspace;
 use plotly::{Layout, Plot, Scatter, common::Mode, layout::Axis};
-use tiktoken_rs::{CoreBPE, get_bpe_from_model};
 
-use crate::{
-    config::Config, data_loader::DataLoader, gpt::GPT, gpt_data_loader::GPTDataLoader,
-    gpt_dataset_v1::GPTDatasetV1, gpt_model::GPTModel,
-};
+use crate::{config::Config, data_loader::DataLoader, gpt::GPT, gpt_data_loader::GPTDataLoader, gpt_model::GPTModel, gpt_dataset_v1::GPTDatasetV1, tokenizer::{Decoder, Encoder, Tokenizer}};
 
 mod config;
 mod data_loader;
@@ -25,11 +21,12 @@ mod gpt;
 mod gpt_data_batcher;
 mod gpt_data_loader;
 mod gpt_dataset_iter;
-mod gpt_dataset_v1;
 mod gpt_model;
 mod layer_norm;
 mod multi_head_attention;
+mod gpt_dataset_v1;
 mod sequential_transformers;
+mod tokenizer;
 mod transformer_block;
 
 fn main() {
@@ -39,11 +36,10 @@ fn main() {
     let vb = VarBuilder::from_varmap(&vm, DType::F32, &dev);
 
     // Prepare Model
-    let config = Config::gpt2_124m();
+    let config = Config::bnbusdt();
     let model = GPTModel::new(config, vb.pp("model")).unwrap();
-    if Path::new("checkpoint.safetensors").exists() {
-        println!("Load weights from `./checkpoint.safetensors`");
-        vm.load("checkpoint.safetensors").unwrap();
+    if Path::new("load.safetensors").exists() {
+        vm.load("load.safetensors").unwrap();
     }
 
     // Training Optimizer
@@ -58,10 +54,10 @@ fn main() {
     .unwrap();
 
     // Train Model
-    let tokenizer = get_bpe_from_model("gpt2").unwrap();
+    let tokenizer = Tokenizer::new("data/vocab.txt");
     let (eval_freq, eval_iter, num_epochs) = (5_usize, 5_usize, 10_usize);
-    let (train_loader, val_loader) = get_train_val_data_loaders(false).unwrap();
-    let start_context = "Every effort moves you";
+    let (train_loader, val_loader) = get_data_loader(&tokenizer, &config, false).unwrap();
+    let start_context = &[524.5, 524.2, 524.5, 523.6, 522.7, 524.2, 526.5, 526.1];
     let (train_losses, val_losses, tokens_seen) = train_model_simple(
         &model,
         &train_loader,
@@ -91,11 +87,11 @@ fn main() {
     );
 
     // Save Weight
-    println!("Saving weights to `./checkpoint2.safetensors`");
-    vm.save("checkpoint2.safetensors").unwrap();
+    println!("Saving weights to `./save.safetensors`");
+    vm.save("save.safetensors").unwrap();
 
     // Save Loss Plot
-    println!("Saving loss plot to `./plot_pretraining_loss.html`");
+    println!("Saving loss plot to `./loss_plot.html`");
     let epochs_seen = Vec::from_iter(linspace(0_f32, num_epochs as f32, train_losses.len()));
     let tokens_seen = tokens_seen
         .into_iter()
@@ -205,14 +201,14 @@ pub fn calc_loss_loader<
 }
 
 pub fn create_dataloader_v1(
-    txt: &str,
+    tokenizer: &Tokenizer,
+    txt: &[f64],
     batch_size: usize,
     max_length: usize,
     stride: usize,
     shuffle: bool,
     drop_last: bool,
 ) -> GPTDataLoader {
-    let tokenizer = tiktoken_rs::get_bpe_from_model("gpt2").unwrap();
     let dataset = GPTDatasetV1::new(txt, tokenizer, max_length, stride);
     GPTDataLoader::new(dataset, batch_size, shuffle, drop_last)
 }
@@ -235,15 +231,15 @@ pub fn evaluate_model<
 
 pub fn generate_and_print_sample<M: GPT + ModuleT>(
     model: &M,
-    tokenizer: &CoreBPE,
+    tokenizer: &Tokenizer,
     device: &Device,
-    start_context: &str,
+    start_context: &[f64],
 ) -> Result<()> {
     let context_size = model.context_size();
     let encoded = text_to_token_ids(start_context, tokenizer, device)?;
     let token_ids = generate_text_simple(model, encoded, 50, context_size)?;
     let decoded_text = token_ids_to_text(token_ids, tokenizer).unwrap();
-    println!("{}", decoded_text.replace("\n", " "));
+    println!("{decoded_text:?}");
     Ok(())
 }
 
@@ -268,34 +264,42 @@ pub fn generate_text_simple<M: GPT + ModuleT>(
     Ok(idx)
 }
 
-pub fn get_train_val_data_loaders(verbose: bool) -> anyhow::Result<(GPTDataLoader, GPTDataLoader)> {
-    let text_data = read_to_string("data/the-verdict.txt").expect("Unable to read the file");
-    let total_characters = text_data.len();
-    let tokenizer = get_bpe_from_model("gpt2")?;
-    let total_tokens = tokenizer
-        .encode_with_special_tokens(text_data.as_str())
-        .len();
+pub fn get_data_loader(
+    tokenizer: &Tokenizer,
+    config: &Config,
+    verbose: bool,
+) -> anyhow::Result<(GPTDataLoader, GPTDataLoader)> {
+    let file = File::open("data/data.txt")?;
+    let reader = BufReader::new(file);
+
+    let data: Vec<f64> = reader
+        .lines()
+        .filter_map(std::io::Result::ok)
+        .filter_map(|line| line.parse().ok())
+        .collect();
+
+    let tokens = tokenizer.encode(&data);
     if verbose {
-        println!("Characters: {:?}", total_characters);
-        println!("Tokens: {:?}", total_tokens);
+        println!("Data: {:?}", data.len());
+        println!("Tokens: {:?}", tokens.len());
     }
 
     // establish train and val data
     let train_ratio = 0.90_f32;
-    let split_idx = (train_ratio * text_data.len() as f32) as usize;
-    let train_data = &text_data[..split_idx];
-    let val_data = &text_data[split_idx..];
-
-    // build train and val GPTDatasetV1 and batchers
-    let mut cfg = Config::gpt2_124m();
-    cfg.context_length = 256_usize;
+    let split_idx = (train_ratio * data.len() as f32) as usize;
+    let train_data = &data[..split_idx];
+    let val_data = &data[split_idx..];
 
     let batch_size = 2_usize;
-    let max_length = cfg.context_length;
-    let stride = cfg.context_length;
+    let max_length = config.context_length;
+    let stride = config.context_length;
 
-    let train_loader = create_dataloader_v1(train_data, batch_size, max_length, stride, true, true);
-    let val_loader = create_dataloader_v1(val_data, batch_size, max_length, stride, false, false);
+    let train_loader = create_dataloader_v1(
+        &tokenizer, train_data, batch_size, max_length, stride, true, true,
+    );
+    let val_loader = create_dataloader_v1(
+        &tokenizer, val_data, batch_size, max_length, stride, false, false,
+    );
 
     Ok((train_loader, val_loader))
 }
@@ -342,17 +346,16 @@ pub fn plot_losses<P: AsRef<Path>>(
     Ok(())
 }
 
-pub fn text_to_token_ids(text: &str, tokenizer: &CoreBPE, dev: &Device) -> Result<Tensor> {
-    let allowed_special = HashSet::from(["<|endoftext|>"]);
-    let encoded = tokenizer.encode(text, allowed_special);
+pub fn text_to_token_ids(text: &[f64], tokenizer: &Tokenizer, dev: &Device) -> Result<Tensor> {
+    let encoded = tokenizer.encode(text);
     let num_tokens = encoded.len();
     // encoded tensor
     Tensor::from_vec(encoded, (1_usize, num_tokens), dev)
 }
 
-pub fn token_ids_to_text(token_ids: Tensor, tokenizer: &CoreBPE) -> anyhow::Result<String> {
+pub fn token_ids_to_text(token_ids: Tensor, tokenizer: &Tokenizer) -> anyhow::Result<Vec<f64>> {
     let flat = token_ids.squeeze(0)?;
-    tokenizer.decode(flat.to_vec1::<u32>()?)
+    Ok(tokenizer.decode(flat.to_vec1::<u32>()?))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -369,8 +372,8 @@ pub fn train_model_simple<
     num_epochs: usize,
     eval_freq: usize,
     eval_iter: usize,
-    start_context: &str,
-    tokenizer: &CoreBPE,
+    start_context: &[f64],
+    tokenizer: &Tokenizer,
     ignore_index: Option<i64>, // introduced for ch07 instruction finetuning
 ) -> Result<(Vec<f32>, Vec<f32>, Vec<usize>)>
 where

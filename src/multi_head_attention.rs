@@ -12,7 +12,6 @@ pub struct MultiHeadAttention {
     out_proj: Linear,
     scaling: f64,
     dropout: Dropout,
-    drop_p: f32,
 }
 
 impl MultiHeadAttention {
@@ -46,7 +45,6 @@ impl MultiHeadAttention {
             out_proj,
             scaling,
             dropout,
-            drop_p,
         })
     }
 }

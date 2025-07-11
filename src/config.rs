@@ -10,10 +10,10 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn gpt2_124m() -> Self {
+    pub fn bnbusdt() -> Self {
         Self {
-            vocab_size: 50_257,
-            context_length: 1_024,
+            vocab_size: 2820,
+            context_length: 1024,
             emb_dim: 768,
             n_heads: 12,
             n_layers: 12,

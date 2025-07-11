@@ -1,6 +1,6 @@
 use std::{ops::Deref, rc::Rc};
 
-use tiktoken_rs::CoreBPE;
+use crate::tokenizer::{Encoder, Tokenizer};
 
 #[derive(Clone)]
 pub struct GPTDatasetV1(Rc<GPTDatasetV1_>);
@@ -11,8 +11,8 @@ pub struct GPTDatasetV1_ {
 }
 
 impl GPTDatasetV1 {
-    pub fn new(txt: &str, tokenizer: CoreBPE, max_length: usize, stride: usize) -> Self {
-        let token_ids = tokenizer.encode_with_special_tokens(txt);
+    pub fn new(txt: &[f64], tokenizer: &Tokenizer, max_length: usize, stride: usize) -> Self {
+        let token_ids = tokenizer.encode(txt);
 
         let mut input_ids: Vec<Vec<u32>> = Vec::default();
         let mut target_ids: Vec<Vec<u32>> = Vec::default();
