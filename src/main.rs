@@ -55,7 +55,7 @@ fn main() {
 
     // Train Model
     let tokenizer = Tokenizer::new("data/vocab.txt");
-    let (eval_freq, eval_iter, num_epochs) = (5_usize, 5_usize, 10_usize);
+    let (eval_freq, eval_iter, num_epochs) = (5_usize, 5_usize, 20_usize);
     let (train_loader, val_loader) = get_data_loader(&tokenizer, &config, false).unwrap();
     let start_context = &[524.5, 524.2, 524.5, 523.6, 522.7, 524.2, 526.5, 526.1];
     let (train_losses, val_losses, tokens_seen) = train_model_simple(
