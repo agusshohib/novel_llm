@@ -97,7 +97,7 @@ fn main() {
         .into_iter()
         .map(|el| el as f32)
         .collect::<Vec<_>>();
-    let save_path = Path::new("plot_retraining_loss.html").to_path_buf();
+    let save_path = Path::new("loss_plot.html").to_path_buf();
     plot_losses(
         epochs_seen,
         tokens_seen,
